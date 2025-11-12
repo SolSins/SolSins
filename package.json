@@ -3,6 +3,6 @@
   "private": true,
   "workspaces": ["apps/*"],
   "scripts": {
-    "dev": "pnpm -C apps/web dev"
-  }
+  "dev": "pnpm --filter web dev"
+}
 }

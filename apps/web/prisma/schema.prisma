@@ -1,6 +1,7 @@
 generator client {
   provider = "prisma-client-js"
 }
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -11,48 +12,55 @@ model User {
   email     String   @unique
   role      String   @default("FAN")
   createdAt DateTime @default(now())
-  Orders    Order[]  @relation("BuyerOrders")
-  Balance   Balance?
+
+  // relations
+  Orders  Order[]  @relation("BuyerOrders")
+  Balance Balance?
+  Creator Creator? @relation("UserCreator") // <-- back relation added
 }
 
 model Creator {
-  id         String @id @default(cuid())
-  userId     String @unique
-  handle     String @unique
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  handle      String   @unique
   displayName String
-  createdAt  DateTime @default(now())
-  user       User   @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
+
+  // relations
+  user User @relation("UserCreator", fields: [userId], references: [id])
 }
 
 model Order {
-  id            String   @id @default(cuid())
-  buyerId       String
-  creatorId     String
-  kind          String
-  currency      String
+  id             String   @id @default(cuid())
+  buyerId        String
+  creatorId      String
+  kind           String
+  currency       String
   amountUsdCents Int
   amountLamports String?
-  destination   String
-  reference     String   @unique
-  status        String   @default("PENDING")
-  signature     String?
-  createdAt     DateTime @default(now())
-  buyer         User     @relation("BuyerOrders", fields:[buyerId], references:[id])
+  destination    String
+  reference      String   @unique
+  status         String   @default("PENDING")
+  signature      String?
+  createdAt      DateTime @default(now())
+
+  buyer User @relation("BuyerOrders", fields: [buyerId], references: [id])
 }
 
 model EphemeralWallet {
-  id              String   @id @default(cuid())
-  orderId         String?  @unique
-  pubkey          String   @unique
+  id              String    @id @default(cuid())
+  orderId         String?   @unique
+  pubkey          String    @unique
   secretEncrypted String?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
   sweptAt         DateTime?
   sweepSignature  String?
-  used            Boolean  @default(false)
+  used            Boolean   @default(false)
 }
 
 model Balance {
   userId   String @id
   usdCents Int    @default(0)
-  user     User   @relation(fields: [userId], references: [id])
+
+  user User @relation(fields: [userId], references: [id])
 }

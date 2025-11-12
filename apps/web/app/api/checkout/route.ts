@@ -1,21 +1,20 @@
 import { NextResponse } from "next/server";
-import { pickRandomEmptyWallet } from "@/providers/solana-wallets";
+import { Keypair, PublicKey } from "@solana/web3.js";
 import { encodeURL } from "@solana/pay";
-import { PublicKey } from "@solana/web3.js";
 import { prisma } from "@/lib/db";
+import { pickRandomEmptyWallet } from "@/providers/solana-wallets";
 
 export async function POST(req: Request) {
-  const body = await req.json();
-  const { buyerId, creatorId, kind, amountUsdCents, token } = body;
+  const { buyerId, creatorId, kind, amountUsdCents, token } = await req.json();
 
   if (!buyerId || !creatorId || !amountUsdCents) {
     return NextResponse.json({ error: "missing fields" }, { status: 400 });
   }
 
-  const destination = await pickRandomEmptyWallet();
+  // create a unique reference for Solana Pay (wallets will include it in tx)
+  const reference = Keypair.generate().publicKey.toBase58();
 
-  // create order in DB
-  const reference = (await import("@solana/web3.js")).Keypair.generate().publicKey.toBase58();
+  const destination = await pickRandomEmptyWallet();
 
   const order = await prisma.order.create({
     data: {
@@ -24,7 +23,6 @@ export async function POST(req: Request) {
       kind: kind ?? "PPV",
       currency: token ?? "SOL",
       amountUsdCents,
-      amountLamports: null,
       destination,
       reference,
       status: "PENDING"
@@ -33,10 +31,15 @@ export async function POST(req: Request) {
 
   const url = encodeURL({
     recipient: new PublicKey(destination),
-    reference: [], // optional, we rely on destination and amount verification
+    reference: [new PublicKey(reference)],
     label: "SolSins",
-    message: `${kind} • ${creatorId}`
+    message: `${order.kind} • ${order.creatorId}`
   });
 
-  return NextResponse.json({ orderId: order.id, solanaPayUrl: url.toString(), destination, reference });
+  return NextResponse.json({
+    orderId: order.id,
+    reference,
+    destination,
+    solanaPayUrl: url.toString()
+  });
 }
