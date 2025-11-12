@@ -1,3 +1,5 @@
+// apps/web/prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,37 +9,72 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  role      String   @default("FAN")
-  createdAt DateTime @default(now())
+// ---------- Enums ----------
+enum Role { FAN CREATOR ADMIN }
+enum MediaVisibility { PUBLIC PAY_PER_VIEW SUBSCRIBERS }
+enum MediaType { IMAGE VIDEO AUDIO FILE }
 
-  // relations
-  Orders  Order[]  @relation("BuyerOrders")
-  Balance Balance?
-  Creator Creator? @relation("UserCreator") // <-- back relation added
+// ---------- Core models ----------
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  hashedPassword String?
+  role           Role     @default(FAN)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  creatorProfile Creator?
+  orders         Order[]   @relation("BuyerOrders")
+  purchases      Purchase[]
+  balance        Balance?
+  sessions       Session[]
+  accounts       Account[]
 }
 
 model Creator {
-  id          String   @id @default(cuid())
-  userId      String   @unique
-  handle      String   @unique
-  displayName String
-  createdAt   DateTime @default(now())
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  handle          String   @unique
+  displayName     String
+  bio             String   @default("")
+  avatarUrl       String   @default("")
+  bannerUrl       String   @default("")
+  defaultCurrency String   @default("USD")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  // relations
-  user User @relation("UserCreator", fields: [userId], references: [id])
+  // Relations
+  user  User   @relation(fields: [userId], references: [id])
+  media Media[]
+}
+
+model Media {
+  id             String          @id @default(cuid())
+  creatorId      String
+  type           MediaType
+  title          String
+  caption        String          @default("")
+  fileUrl        String
+  coverUrl       String          @default("")
+  visibility     MediaVisibility @default(PAY_PER_VIEW)
+  priceUsdCents  Int?
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+
+  creator   Creator   @relation(fields: [creatorId], references: [id])
+  purchases Purchase[]
 }
 
 model Order {
   id             String   @id @default(cuid())
   buyerId        String
   creatorId      String
-  kind           String
-  currency       String
+  mediaId        String?
+  kind           String   // PPV, SUB, TIP
+  currency       String   // SOL or SPL symbol
   amountUsdCents Int
-  amountLamports String?
+  amountLamports String   // exact lamports used in validateTransfer
   destination    String
   reference      String   @unique
   status         String   @default("PENDING")
@@ -47,15 +84,15 @@ model Order {
   buyer User @relation("BuyerOrders", fields: [buyerId], references: [id])
 }
 
-model EphemeralWallet {
-  id              String    @id @default(cuid())
-  orderId         String?   @unique
-  pubkey          String    @unique
-  secretEncrypted String?
-  createdAt       DateTime  @default(now())
-  sweptAt         DateTime?
-  sweepSignature  String?
-  used            Boolean   @default(false)
+model Purchase {
+  id        String   @id @default(cuid())
+  userId    String
+  mediaId   String
+  orderId   String   @unique
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id])
+  media Media @relation(fields: [mediaId], references: [id])
 }
 
 model Balance {
@@ -63,4 +100,41 @@ model Balance {
   usdCents Int    @default(0)
 
   user User @relation(fields: [userId], references: [id])
+}
+
+// ---------- NextAuth adapter models ----------
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }

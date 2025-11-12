@@ -13,12 +13,16 @@ export default function PayPage() {
   const [url, setUrl] = useState<string>("");
 
   useEffect(() => {
-    (async () => {
-      // ensure we have dev users
-      const s = await fetch("/dev/seed").then(r => r.json());
+  (async () => {
+    try {
+      const seedRes = await fetch("/dev/seed", { cache: "no-store" });
+      if (!seedRes.ok) {
+        const txt = await seedRes.text().catch(() => "");
+        throw new Error(`Seed failed: ${seedRes.status} ${txt}`);
+      }
+      const s = await seedRes.json(); // will be valid now
       setSeed(s);
 
-      // create a $9.99 PPV order to the dev creator
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -30,14 +34,22 @@ export default function PayPage() {
           token: "SOL"
         })
       });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`Checkout failed: ${res.status} ${txt}`);
+      }
       const data = await res.json();
       setRef(data.reference);
       setUrl(data.solanaPayUrl);
       const code = await QRCode.toDataURL(data.solanaPayUrl);
       setQr(code);
       setStatus("pending");
-    })();
-  }, []);
+    } catch (e: any) {
+      console.error("[/pay] init error:", e);
+      setStatus(`error: ${e?.message ?? e}`);
+    }
+  })();
+}, []);
 
   useEffect(() => {
     if (!ref) return;

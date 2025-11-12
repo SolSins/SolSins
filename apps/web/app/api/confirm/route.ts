@@ -19,19 +19,23 @@ export async function GET(req: Request) {
     const sigInfo = await findReference(conn, refPub, { finality: "confirmed" });
 
     await validateTransfer(conn, sigInfo.signature, {
-      recipient: new PublicKey(order.destination)
-      // amount: optional strict amount check (lamports) – add later if desired
-      // splToken: set if you're validating USDC SPL
-    });
+  recipient: new PublicKey(order.destination),
+  amount: BigInt(order.amountLamports || "0"), // ← REQUIRED by @solana/pay@0.2.6
+  // splToken: ... (only if using USDC SPL)
+});
 
-    await prisma.$transaction([
-      prisma.order.update({ where: { reference }, data: { status: "CONFIRMED", signature: sigInfo.signature } }),
-      prisma.balance.upsert({
-        where: { userId: order.creatorId },
-        update: { usdCents: { increment: order.amountUsdCents } },
-        create: { userId: order.creatorId, usdCents: order.amountUsdCents }
-      })
-    ]);
+       const tx = await prisma.$transaction(async (tx) => {
+      const updated = await tx.order.update({ where: { reference }, data: { status: "CONFIRMED", signature: sigInfo.signature } });
+      if (updated.mediaId) {
+        await tx.purchase.create({ data: { userId: updated.buyerId, mediaId: updated.mediaId, orderId: updated.id } });
+      }
+      await tx.balance.upsert({
+        where: { userId: updated.creatorId },
+        update: { usdCents: { increment: updated.amountUsdCents } },
+        create: { userId: updated.creatorId, usdCents: updated.amountUsdCents }
+      });
+      return updated;
+    });
 
     return NextResponse.json({ status: "confirmed", signature: sigInfo.signature });
   } catch {
