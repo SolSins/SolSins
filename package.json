@@ -1,0 +1,8 @@
+{
+  "name": "solsins",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev": "pnpm -C apps/web dev"
+  }
+}
