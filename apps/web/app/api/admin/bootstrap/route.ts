@@ -3,29 +3,49 @@ import { prisma } from "@/lib/db";
 import { hash } from "bcrypt";
 
 export async function POST(req: Request) {
-  const { token, email, password } = await req.json();
+  try {
+    const body = await req.json().catch(() => ({}));
+    const { email, password } = body as { email?: string; password?: string };
 
-  if (!email || !password) {
-    return NextResponse.json({ error: "Missing email/password" }, { status: 400 });
-  }
-
-  // Check if any admin already exists
-  const adminCount = await prisma.user.count({ where: { role: "ADMIN" } });
-
-  // If admins already exist, require a matching token
-  if (adminCount > 0) {
-    if (!process.env.ADMIN_SETUP_TOKEN || token !== process.env.ADMIN_SETUP_TOKEN) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!email || !password) {
+      return NextResponse.json(
+        { ok: false, error: "Missing email or password" },
+        { status: 400 }
+      );
     }
+
+    // Check how many admins exist
+    const adminCount = await prisma.user.count({
+      where: { role: "ADMIN" },
+    });
+
+    const hashedPassword = await hash(password, 10);
+
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: {
+        role: "ADMIN",
+        hashedPassword,
+      },
+      create: {
+        email,
+        role: "ADMIN",
+        hashedPassword,
+      },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      firstAdmin: adminCount === 0,
+    });
+  } catch (err: any) {
+    console.error("[/api/admin/bootstrap] error:", err);
+    return NextResponse.json(
+      { ok: false, error: err?.message ?? "Unknown error" },
+      { status: 500 }
+    );
   }
-
-  const hashedPassword = await hash(password, 10);
-
-  const user = await prisma.user.upsert({
-    where: { email },
-    update: { role: "ADMIN", hashedPassword },
-    create: { email, role: "ADMIN", hashedPassword }
-  });
-
-  return NextResponse.json({ ok: true, userId: user.id, role: user.role, firstAdmin: adminCount === 0 });
 }

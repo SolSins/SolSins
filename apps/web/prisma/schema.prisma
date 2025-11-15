@@ -1,5 +1,3 @@
-// apps/web/prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,12 +7,25 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ---------- Enums ----------
-enum Role { FAN CREATOR ADMIN }
-enum MediaVisibility { PUBLIC PAY_PER_VIEW SUBSCRIBERS }
-enum MediaType { IMAGE VIDEO AUDIO FILE }
+enum Role {
+  FAN
+  CREATOR
+  ADMIN
+}
 
-// ---------- Core models ----------
+enum MediaVisibility {
+  PUBLIC
+  PAY_PER_VIEW
+  SUBSCRIBERS
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  AUDIO
+  FILE
+}
+
 model User {
   id             String   @id @default(cuid())
   email          String   @unique
@@ -22,14 +33,12 @@ model User {
   role           Role     @default(FAN)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  displayName String?   // optional for fans
 
-  // Relations
   creatorProfile Creator?
-  orders         Order[]   @relation("BuyerOrders")
+  orders         Order[]    @relation("BuyerOrders")
   purchases      Purchase[]
   balance        Balance?
-  sessions       Session[]
-  accounts       Account[]
 }
 
 model Creator {
@@ -44,25 +53,24 @@ model Creator {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  // Relations
-  user  User   @relation(fields: [userId], references: [id])
+  user  User    @relation(fields: [userId], references: [id])
   media Media[]
 }
 
 model Media {
-  id             String          @id @default(cuid())
-  creatorId      String
-  type           MediaType
-  title          String
-  caption        String          @default("")
-  fileUrl        String
-  coverUrl       String          @default("")
-  visibility     MediaVisibility @default(PAY_PER_VIEW)
-  priceUsdCents  Int?
-  isActive       Boolean         @default(true)
-  createdAt      DateTime        @default(now())
+  id            String          @id @default(cuid())
+  creatorId     String
+  type          MediaType
+  title         String
+  caption       String          @default("")
+  fileUrl       String
+  coverUrl      String          @default("")
+  visibility    MediaVisibility @default(PAY_PER_VIEW)
+  priceUsdCents Int?
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
 
-  creator   Creator   @relation(fields: [creatorId], references: [id])
+  creator   Creator    @relation(fields: [creatorId], references: [id])
   purchases Purchase[]
 }
 
@@ -71,10 +79,10 @@ model Order {
   buyerId        String
   creatorId      String
   mediaId        String?
-  kind           String   // PPV, SUB, TIP
-  currency       String   // SOL or SPL symbol
+  kind           String
+  currency       String
   amountUsdCents Int
-  amountLamports String   // exact lamports used in validateTransfer
+  amountLamports String
   destination    String
   reference      String   @unique
   status         String   @default("PENDING")
@@ -100,41 +108,4 @@ model Balance {
   usdCents Int    @default(0)
 
   user User @relation(fields: [userId], references: [id])
-}
-
-// ---------- NextAuth adapter models ----------
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.Text
-  session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-}
-
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
 }

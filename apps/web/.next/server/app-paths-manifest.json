@@ -1,3 +1,7 @@
 {
-  "/api/admin/bootstrap/route": "app/api/admin/bootstrap/route.js"
+  "/_not-found/page": "app/_not-found/page.js",
+  "/page": "app/page.js",
+  "/[handle]/page": "app/[handle]/page.js",
+  "/creator/page": "app/creator/page.js",
+  "/api/creator/me/route": "app/api/creator/me/route.js"
 }

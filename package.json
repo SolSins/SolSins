@@ -1,8 +1,17 @@
 {
   "name": "solsins",
   "private": true,
-  "workspaces": ["apps/*"],
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
-  "dev": "pnpm --filter web dev"
-}
+    "dev": "pnpm --filter web dev"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3"
+  },
+  "devDependencies": {
+    "@prisma/client": "^5.22.0",
+    "prisma": "^5.22.0"
+  }
 }
