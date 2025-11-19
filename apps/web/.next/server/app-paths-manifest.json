@@ -1,8 +1,6 @@
 {
-  "/creator/media/page": "app/creator/media/page.js",
+  "/wallet/page": "app/wallet/page.js",
   "/[handle]/page": "app/[handle]/page.js",
-  "/api/fan/me/route": "app/api/fan/me/route.js",
-  "/fan/page": "app/fan/page.js",
-  "/creator/page": "app/creator/page.js",
-  "/api/creator/me/route": "app/api/creator/me/route.js"
+  "/api/wallet/me/route": "app/api/wallet/me/route.js",
+  "/api/wallet/deposit/start/route": "app/api/wallet/deposit/start/route.js"
 }

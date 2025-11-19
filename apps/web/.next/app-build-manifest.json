@@ -1,9 +1,9 @@
 {
   "pages": {
-    "/creator/media/page": [
+    "/wallet/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/creator/media/page.js"
+      "static/chunks/app/wallet/page.js"
     ],
     "/layout": [
       "static/chunks/webpack.js",
@@ -15,16 +15,6 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/[handle]/page.js"
-    ],
-    "/fan/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/fan/page.js"
-    ],
-    "/creator/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/creator/page.js"
     ]
   }
 }

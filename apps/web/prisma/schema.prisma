@@ -26,6 +26,18 @@ enum MediaType {
   FILE
 }
 
+enum MediaAssetKind {
+  PRIMARY // main file
+  GALLERY // extra gallery images
+  COVER // separate cover file
+}
+
+enum WalletDepositStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
 model User {
   id             String   @id @default(cuid())
   email          String   @unique
@@ -33,12 +45,21 @@ model User {
   role           Role     @default(FAN)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-  displayName String?   // optional for fans
+  displayName    String? // optional for fans
 
   creatorProfile Creator?
-  orders         Order[]    @relation("BuyerOrders")
-  purchases      Purchase[]
+
+  // Orders + classic purchases
+  orders    Order[]    @relation("UserOrders")
+  purchases Purchase[] @relation("UserPurchases")
+
+  // New media-purchase tracking
+  mediaPurchases MediaPurchase[] @relation("UserMediaPurchases")
+
+  // Balance + wallet
   balance        Balance?
+  walletAccount  WalletAccount?
+  walletDeposits WalletDeposit[]
 }
 
 model Creator {
@@ -70,8 +91,15 @@ model Media {
   isActive      Boolean         @default(true)
   createdAt     DateTime        @default(now())
 
-  creator   Creator    @relation(fields: [creatorId], references: [id])
-  purchases Purchase[]
+  creator Creator @relation(fields: [creatorId], references: [id])
+
+  // Classic purchases
+  purchases Purchase[] @relation("MediaPurchases")
+
+  // New media-purchase tracking
+  mediaPurchases MediaPurchase[] @relation("MediaMediaPurchases")
+
+  assets MediaAsset[]
 }
 
 model Order {
@@ -89,7 +117,7 @@ model Order {
   signature      String?
   createdAt      DateTime @default(now())
 
-  buyer User @relation("BuyerOrders", fields: [buyerId], references: [id])
+  buyer User @relation("UserOrders", fields: [buyerId], references: [id])
 }
 
 model Purchase {
@@ -99,8 +127,19 @@ model Purchase {
   orderId   String   @unique
   createdAt DateTime @default(now())
 
-  user  User  @relation(fields: [userId], references: [id])
-  media Media @relation(fields: [mediaId], references: [id])
+  user  User  @relation("UserPurchases", fields: [userId], references: [id])
+  media Media @relation("MediaPurchases", fields: [mediaId], references: [id])
+}
+
+model MediaPurchase {
+  id             String   @id @default(cuid())
+  userId         String
+  mediaId        String
+  amountLamports BigInt
+  createdAt      DateTime @default(now())
+
+  user  User  @relation("UserMediaPurchases", fields: [userId], references: [id])
+  media Media @relation("MediaMediaPurchases", fields: [mediaId], references: [id])
 }
 
 model Balance {
@@ -108,4 +147,39 @@ model Balance {
   usdCents Int    @default(0)
 
   user User @relation(fields: [userId], references: [id])
+}
+
+model MediaAsset {
+  id        String         @id @default(cuid())
+  mediaId   String
+  url       String
+  kind      MediaAssetKind @default(GALLERY)
+  sortOrder Int            @default(0)
+  createdAt DateTime       @default(now())
+
+  media Media @relation(fields: [mediaId], references: [id])
+}
+
+model WalletAccount {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
+  balanceLamports BigInt   @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  // no deposits[] here – we don't need a relation to WalletDeposit
+}
+
+model WalletDeposit {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  address        String
+  txSignature    String?
+  amountLamports BigInt
+  status         WalletDepositStatus @default(PENDING)
+
+  createdAt   DateTime  @default(now())
+  confirmedAt DateTime?
 }

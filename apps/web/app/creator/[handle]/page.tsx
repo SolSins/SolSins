@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import React from "react";
 import { notFound } from "next/navigation";
+import { MediaUnlockButton } from "@/components/MediaUnlockButton";
 
 export const dynamic = "force-dynamic";
 
@@ -187,7 +188,7 @@ export default async function CreatorPublicPage({ params }: CreatorPageProps) {
               <span>
                 <strong style={{ color: "#fecaca" }}>{totalMedia}</strong> posts
               </span>
-              <span>Instant unlocks with Solana</span>
+              <span>Instant unlocks with SolSins wallet</span>
             </div>
           </div>
 
@@ -215,8 +216,8 @@ export default async function CreatorPublicPage({ params }: CreatorPageProps) {
                 textAlign: "right",
               }}
             >
-              Pay in SOL, no chargebacks, content delivered instantly after
-              confirmation.
+              Deposit SOL to your SolSins wallet and unlock content directly
+              with your balance.
             </div>
           </div>
         </div>
@@ -345,22 +346,16 @@ export default async function CreatorPublicPage({ params }: CreatorPageProps) {
                         }}
                       >
                         {usd !== null
-                          ? `$${usd.toFixed(2)} • pay in SOL`
+                          ? `$${usd.toFixed(2)} • pay from wallet`
                           : "Free / TBD"}
                       </span>
-                      <a
-                        href={`/pay?creatorId=${creator.id}&mediaId=${
-                          m.id
-                        }&usd=${usd ?? ""}`}
-                        className="btn btn-secondary"
-                        style={{
-                          fontSize: 11,
-                          padding: "5px 10px",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        Unlock via Solana
-                      </a>
+
+                      {/* NEW: wallet-based unlock button */}
+                      <MediaUnlockButton
+                        creatorId={creator.id}
+                        mediaId={m.id}
+                        priceUsdCents={m.priceUsdCents}
+                      />
                     </div>
                   </div>
                 </article>

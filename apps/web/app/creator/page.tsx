@@ -46,10 +46,12 @@ export default function CreatorDashboardPage() {
   const [profile, setProfile] = useState<CreatorProfile | null>(null);
   const [stats, setStats] = useState<CreatorStats | null>(null);
   const [media, setMedia] = useState<CreatorMedia[]>([]);
+  const [walletSol, setWalletSol] = useState<number | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Load local user (from login)
+  // Load local user (from login) – KEEPING YOUR OLD LOGIC
   useEffect(() => {
     try {
       const raw = localStorage.getItem("solsinsUser");
@@ -86,7 +88,7 @@ export default function CreatorDashboardPage() {
           // If the API returns a specific error that creator profile doesn't exist yet
           if (data.error === "creator_not_found") {
             setError(
-              "No creator profile found yet. Soon you’ll be able to set up your creator handle and profile here."
+              "No creator profile found yet. You’ll be able to set up your creator handle and profile here."
             );
           } else {
             setError(data.error || "Failed to load creator data");
@@ -98,6 +100,23 @@ export default function CreatorDashboardPage() {
         setProfile(data.creator);
         setStats(data.stats);
         setMedia(data.media);
+
+        // Fetch wallet balance (SOL)
+        try {
+          const wRes = await fetch("/api/wallet/me", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: user.id }),
+          });
+          const wData = await wRes.json();
+          if (wRes.ok && !wData.error) {
+            const lamports = BigInt(wData.balanceLamports ?? "0");
+            const sol = Number(lamports) / 1_000_000_000; // 1 SOL = 1e9 lamports
+            setWalletSol(sol);
+          }
+        } catch (walletErr) {
+          console.error("[creator dashboard] wallet error:", walletErr);
+        }
       } catch (err: any) {
         console.error("[creator dashboard] fetch error:", err);
         setError("Something went wrong loading your dashboard");
@@ -111,6 +130,15 @@ export default function CreatorDashboardPage() {
     // brief placeholder while we check localStorage
     return null;
   }
+
+  const publicHandle = profile?.handle ?? "your.handle";
+  const earningsUsd =
+    ((stats?.totalUsdCents ?? 0) / 100).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  const walletDisplay =
+    walletSol !== null ? walletSol.toFixed(4) : "0.0000";
 
   return (
     <main
@@ -197,7 +225,7 @@ export default function CreatorDashboardPage() {
                     color: "#fecaca",
                   }}
                 >
-                  @{profile?.handle ?? "your.handle"}
+                  @{publicHandle}
                 </span>
               </h1>
               <p
@@ -208,7 +236,7 @@ export default function CreatorDashboardPage() {
                 }}
               >
                 {profile?.bio ||
-                  "Share photos, clips and sinful moments with your fans. Profile setup and media uploads are coming next."}
+                  "Upload photos and videos, set pay-per-view prices in USD, and let fans unlock everything with SOL."}
               </p>
             </div>
           </div>
@@ -220,16 +248,37 @@ export default function CreatorDashboardPage() {
               borderRadius: 999,
               border: "1px dashed rgba(148,163,184,0.4)",
               padding: "6px 10px",
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 8,
+              alignItems: "center",
             }}
           >
-            Your public profile will be live at{" "}
-            <span style={{ fontFamily: "ui-monospace", color: "#fecaca" }}>
-              /{profile?.handle ?? "your.handle"}
+            <span>
+              Your public profile is live at{" "}
+              <span style={{ fontFamily: "ui-monospace", color: "#fecaca" }}>
+                /{publicHandle}
+              </span>
             </span>
+            <button
+              type="button"
+              onClick={() => router.push(`/${publicHandle}`)}
+              style={{
+                fontSize: 11,
+                padding: "4px 10px",
+                borderRadius: 999,
+                border: "1px solid rgba(148,163,184,0.6)",
+                background: "rgba(15,23,42,0.9)",
+                cursor: "pointer",
+                color: "#fff",
+              }}
+            >
+              View public page
+            </button>
           </div>
         </section>
 
-        {/* Stats card */}
+        {/* Stats + wallet card */}
         <section
           style={{
             borderRadius: 24,
@@ -248,7 +297,7 @@ export default function CreatorDashboardPage() {
               marginBottom: 12,
             }}
           >
-            Earnings overview
+            Earnings & wallet
           </div>
 
           {loading ? (
@@ -269,91 +318,152 @@ export default function CreatorDashboardPage() {
               {error}
             </div>
           ) : (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                gap: 12,
-              }}
-            >
+            <>
               <div
                 style={{
-                  borderRadius: 16,
-                  border: "1px solid rgba(148,163,184,0.4)",
-                  padding: 10,
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                  gap: 12,
+                  marginBottom: 12,
                 }}
               >
                 <div
                   style={{
-                    fontSize: 11,
-                    color: "var(--sin-muted)",
-                    marginBottom: 4,
+                    borderRadius: 16,
+                    border: "1px solid rgba(148,163,184,0.4)",
+                    padding: 10,
                   }}
                 >
-                  Total earnings
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "var(--sin-muted)",
+                      marginBottom: 4,
+                    }}
+                  >
+                    Total earnings
+                  </div>
+                  <div style={{ fontSize: 18, fontWeight: 600 }}>
+                    ${earningsUsd}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--sin-muted)" }}>
+                    100% to you. Paid in SOL.
+                  </div>
                 </div>
-                <div style={{ fontSize: 18, fontWeight: 600 }}>
-                  $
-                  {((stats?.totalUsdCents ?? 0) / 100).toLocaleString("en-US", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
+
+                <div
+                  style={{
+                    borderRadius: 16,
+                    border: "1px solid rgba(148,163,184,0.4)",
+                    padding: 10,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "var(--sin-muted)",
+                      marginBottom: 4,
+                    }}
+                  >
+                    Paid orders
+                  </div>
+                  <div style={{ fontSize: 18, fontWeight: 600 }}>
+                    {stats?.orderCount ?? 0}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--sin-muted)" }}>
+                    PPV, subs & tips
+                  </div>
                 </div>
-                <div style={{ fontSize: 11, color: "var(--sin-muted)" }}>
-                  100% to you. Paid in SOL.
+
+                <div
+                  style={{
+                    borderRadius: 16,
+                    border: "1px solid rgba(148,163,184,0.4)",
+                    padding: 10,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "var(--sin-muted)",
+                      marginBottom: 4,
+                    }}
+                  >
+                    Media items
+                  </div>
+                  <div style={{ fontSize: 18, fontWeight: 600 }}>
+                    {stats?.mediaCount ?? 0}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--sin-muted)" }}>
+                    {stats && stats.mediaCount === 0
+                      ? "Upload your first piece"
+                      : "Visible on your profile"}
+                  </div>
                 </div>
               </div>
 
+              {/* Wallet summary */}
               <div
                 style={{
                   borderRadius: 16,
                   border: "1px solid rgba(148,163,184,0.4)",
                   padding: 10,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 12,
                 }}
               >
-                <div
+                <div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "var(--sin-muted)",
+                      marginBottom: 4,
+                    }}
+                  >
+                    SolSins wallet
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {walletDisplay}{" "}
+                    <span
+                      style={{
+                        fontSize: 12,
+                        color: "var(--sin-muted)",
+                      }}
+                    >
+                      SOL
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--sin-muted)" }}>
+                    Use this balance to support other creators. Deposits live on
+                    the Wallet page.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => router.push("/wallet")}
                   style={{
-                    fontSize: 11,
-                    color: "var(--sin-muted)",
-                    marginBottom: 4,
+                    fontSize: 12,
+                    padding: "6px 14px",
+                    borderRadius: 999,
+                    border: "1px solid rgba(248,113,113,0.6)",
+                    background:
+                      "radial-gradient(circle at 0 0, rgba(248,113,113,0.3), rgba(15,23,42,0.95))",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    color: "#fff",
                   }}
                 >
-                  Paid orders
-                </div>
-                <div style={{ fontSize: 18, fontWeight: 600 }}>
-                  {stats?.orderCount ?? 0}
-                </div>
-                <div style={{ fontSize: 11, color: "var(--sin-muted)" }}>
-                  PPV, subs & tips
-                </div>
+                  Open wallet
+                </button>
               </div>
-
-              <div
-                style={{
-                  borderRadius: 16,
-                  border: "1px solid rgba(148,163,184,0.4)",
-                  padding: 10,
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: "var(--sin-muted)",
-                    marginBottom: 4,
-                  }}
-                >
-                  Media items
-                </div>
-                <div style={{ fontSize: 18, fontWeight: 600 }}>
-                  {stats?.mediaCount ?? 0}
-                </div>
-                <div style={{ fontSize: 11, color: "var(--sin-muted)" }}>
-                  {stats && stats.mediaCount === 0
-                    ? "Upload your first piece"
-                    : "Visible on your profile"}
-                </div>
-              </div>
-            </div>
+            </>
           )}
         </section>
       </div>
@@ -388,16 +498,17 @@ export default function CreatorDashboardPage() {
               Your recent drops
             </div>
             <div style={{ fontSize: 12, color: "var(--sin-muted)" }}>
-              These appear on your public SolSins page. PPV & sub-gated coming
-              next.
+              These appear on your public SolSins page. Each one is unlockable
+              with SOL based on the USD price you set.
             </div>
           </div>
           <button
             className="btn btn-secondary"
             style={{ whiteSpace: "nowrap" }}
             type="button"
+            onClick={() => router.push("/dashboard/upload")}
           >
-            + Upload media (coming soon)
+            + Upload media
           </button>
         </div>
 
@@ -415,8 +526,8 @@ export default function CreatorDashboardPage() {
               padding: "12px 0",
             }}
           >
-            No media yet. Soon this is where you’ll upload photos, videos and
-            PPV posts tied to Solana pay links.
+            No media yet. Upload your first photos or videos and start earning
+            in SOL.
           </div>
         )}
 

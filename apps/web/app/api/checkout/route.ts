@@ -1,45 +1,105 @@
 import { NextResponse } from "next/server";
-import { Keypair, PublicKey } from "@solana/web3.js";
-import { encodeURL } from "@solana/pay";
 import { prisma } from "@/lib/db";
 import { pickRandomEmptyWallet } from "@/providers/solana-wallets";
 import { usdToLamports } from "@/lib/pricing";
 
 export async function POST(req: Request) {
-  const { buyerId, creatorId, kind, amountUsdCents, token, mediaId } = await req.json();
-  if (!buyerId || !creatorId) return NextResponse.json({ error: "missing fields" }, { status: 400 });
+  try {
+    const {
+      buyerId,
+      creatorId,
+      kind,
+      amountUsdCents,
+      token,
+      mediaId,
+    } = await req.json();
 
-  let usdCents = amountUsdCents;
-  if (mediaId) {
-    const media = await prisma.media.findUnique({ where: { id: mediaId } });
-    if (!media || media.visibility !== "PAY_PER_VIEW" || !media.priceUsdCents) {
-      return NextResponse.json({ error: "Invalid media" }, { status: 400 });
+    // Basic validation
+    if (!buyerId || !creatorId || !kind || !amountUsdCents || !token) {
+      return NextResponse.json(
+        { ok: false, error: "Missing required checkout fields" },
+        { status: 400 }
+      );
     }
-    usdCents = media.priceUsdCents;
+
+    // For now we only support SOL
+    if (token !== "SOL") {
+      return NextResponse.json(
+        { ok: false, error: `Unsupported currency: ${token}` },
+        { status: 400 }
+      );
+    }
+
+    const amountCentsNumber = Number(amountUsdCents);
+    if (!Number.isFinite(amountCentsNumber) || amountCentsNumber <= 0) {
+      return NextResponse.json(
+        { ok: false, error: `Invalid amountUsdCents: ${amountUsdCents}` },
+        { status: 400 }
+      );
+    }
+
+    // Convert to lamports
+    const lamports = await usdToLamports(amountCentsNumber);
+
+    // Pick a destination SOL wallet for this checkout
+    const destination = await pickRandomEmptyWallet(token);
+    if (!destination) {
+      return NextResponse.json(
+        { ok: false, error: "No SOL wallet available for checkout" },
+        { status: 500 }
+      );
+    }
+
+    const reference = crypto.randomUUID();
+
+    // Persist order in DB
+    const order = await prisma.order.create({
+      data: {
+        buyerId,
+        creatorId,
+        mediaId: mediaId ?? null,
+        // `kind` is stored as-is (e.g. "PPV"), since your schema
+        // very likely uses `String` for this column.
+        kind: String(kind),
+        currency: token,
+        amountUsdCents: amountCentsNumber,
+        amountLamports: String(lamports),
+        destination,
+        reference,
+        status: "PENDING",
+      },
+    });
+
+    // Build a simple Solana Pay URL, e.g.:
+    // solana:DESTINATION?amount=0.123&reference=...&label=SolSins&message=...
+    const amountSol = lamports / 1_000_000_000;
+    const params = new URLSearchParams({
+      amount: amountSol.toString(),
+      reference,
+      label: "SolSins",
+      message: "SolSins unlock",
+    });
+    const solanaPayUrl = `solana:${destination}?${params.toString()}`;
+
+    return NextResponse.json({
+      ok: true,
+      order: {
+        id: order.id,
+        reference: order.reference,
+        destination: order.destination,
+        amountLamports: order.amountLamports,
+        amountUsdCents: order.amountUsdCents,
+        currency: order.currency,
+      },
+      solanaPayUrl,
+    });
+  } catch (err) {
+    console.error("[api/checkout] error", err);
+    const message =
+      err instanceof Error ? err.message : "Unknown error in /api/checkout";
+    return NextResponse.json(
+      { ok: false, error: message },
+      { status: 500 }
+    );
   }
-  if (!usdCents) return NextResponse.json({ error: "amount required" }, { status: 400 });
-
-  const reference = Keypair.generate().publicKey.toBase58();
-  const destination = await pickRandomEmptyWallet();
-  const lamports = await usdToLamports(usdCents);
-
-  const order = await prisma.order.create({
-    data: {
-      buyerId, creatorId, mediaId: mediaId ?? null,
-      kind: kind ?? (mediaId ? "PPV" : "TIP"),
-      currency: token ?? "SOL",
-      amountUsdCents: usdCents,
-      amountLamports: lamports.toString(),
-      destination, reference, status: "PENDING"
-    }
-  });
-
-  const url = encodeURL({
-    recipient: new PublicKey(destination),
-    reference: [new PublicKey(reference)],
-    label: "SolSins",
-    message: `${order.kind} • ${order.creatorId}`
-  });
-
-  return NextResponse.json({ orderId: order.id, reference, destination, expectedLamports: order.amountLamports, solanaPayUrl: url.toString() });
 }
